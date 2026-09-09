@@ -1078,6 +1078,35 @@ for i in range(N_GPU):
 """
 
 
+S5_RTTM = """
+# Stage 5 relabels WORDS, but the results table needs baseline-vs-improved DER and
+# JER, which are defined over TIME. This converts the corrected word labels back
+# into RTTMs so stage3_score.py can score them.
+#
+# Boundaries are taken unchanged from the baseline diarizer and only the labels
+# are revised, by duration-weighted majority of the corrected words in each
+# turn. Rebuilding turns from word spans instead would drop the silence inside
+# each turn, shrink hypothesis speech time, and move DER for a reason that has
+# nothing to do with Stage 5.
+
+CORRECTED = [c + "+rule" for c in BASE]
+RTTM_ARG = " ".join(CORRECTED)
+print("converting:", RTTM_ARG)
+"""
+
+
+S5_DER = """
+# Score the relabelled RTTMs against the baselines. Same metric policy as
+# Stage 3: collar 0, overlap scored, UEM = the full clip.
+import pathlib
+
+SYSTEMS = sorted(p.name for p in pathlib.Path("/kaggle/working/data/hyp").glob("*")
+                 if p.is_dir())
+print("systems:", SYSTEMS)
+DER_ARG = " ".join(SYSTEMS)
+"""
+
+
 def build_stage5() -> None:
     cells = [
         md("""
@@ -1208,6 +1237,29 @@ means the text invariant was violated and every other number in the row is void.
              'df = pd.read_csv("/kaggle/working/data/results/asr_summary.csv")\n'
              'df = df[df.subset == "all"] if "subset" in df else df\n'
              'print(df.sort_values(["asr", "diar"]).to_string(index=False))'),
+        md("""
+## DER and JER for the corrected output
+
+The results table needs **baseline vs improved DER / JER / cpWER / WDER**. Stage 5
+relabels words, so cpWER and WDER move but DER and JER cannot -- they are
+defined over time, and nothing above has written a new RTTM.
+
+This converts the corrected word labels back into RTTMs. Turn **boundaries are
+taken unchanged** from the baseline diarizer; only the label is revised, by
+duration-weighted majority of the corrected words inside each turn. So missed
+speech, false alarm and total speech time are identical to the baseline by
+construction, and any DER/JER delta is **speaker confusion alone** -- which is
+the only thing a relabel-only stage can affect.
+
+CPU, seconds.
+"""),
+        code(S5_RTTM),
+        code("!python stage5_to_rttm.py --data data --cond {RTTM_ARG}"),
+        code(S5_DER),
+        code("!python stage3_score.py --data data --systems {DER_ARG} --diagnostic"),
+        code('import pandas as pd\n'
+             'print(pd.read_csv("/kaggle/working/data/results/'
+             'diarization_summary.csv").to_string(index=False))'),
         md("""
 ## Save
 
