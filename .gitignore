@@ -1,0 +1,11 @@
+data/
+raw/
+*.wav
+upload_code/
+stage1.log
+
+# Raw Kaggle run scrollback -- transient, and the results live in
+# data/results/ and the saved Kaggle datasets.
+notebooks/download*.txt
+__pycache__/
+*.pyc
