@@ -1089,9 +1089,27 @@ S5_RTTM = """
 # each turn, shrink hypothesis speech time, and move DER for a reason that has
 # nothing to do with Stage 5.
 
-CORRECTED = [c + "+rule" for c in BASE]
-RTTM_ARG = " ".join(CORRECTED)
+#
+# Read from disk, not from CONDS: the setup cell listed conditions BEFORE the
+# rule and LLM passes above created theirs.
+#
+# BASE is converted too, with no edits applied. That round trip is the CONTROL:
+# projecting word labels onto turns changes DER by itself (17% of pyannote31
+# turns relabelled under IndicConformer words, 31% under Whisper), so a method's
+# DER effect is `asr__diar+method` minus `asr__diar`, never minus the raw
+# diarizer. Without these rows that cost is silently booked against Stage 5.
+_attrib = pathlib.Path("/kaggle/working/data/attrib")
+CORRECTED = sorted(p.name for p in _attrib.iterdir() if p.is_dir() and "+" in p.name)
+RTTM_ARG = " ".join(CORRECTED + BASE)
 print("converting:", RTTM_ARG)
+"""
+
+
+S6_REPORT = """
+# Stage 6 -- CPU, seconds. Rebuilds every table from the per-clip CSVs above and
+# refuses to write if WER moved between methods, if a boundary moved, or if a
+# re-derived corpus figure disagrees with the Stage 3/4 summaries.
+!python stage6_report.py --data data
 """
 
 
@@ -1260,6 +1278,15 @@ CPU, seconds.
         code('import pandas as pd\n'
              'print(pd.read_csv("/kaggle/working/data/results/'
              'diarization_summary.csv").to_string(index=False))'),
+        md("""
+## Stage 6 -- the results table
+
+Baseline vs improved DER / JER / cpWER / WDER per model per video, with the
+projection control beside every DER, per-clip win/loss counts, and breakdowns by
+language, speaker count and overlap. Writes `results_table.md`,
+`results_per_video.csv` and `results_per_video.xlsx` to `data/results/`.
+"""),
+        code(S6_REPORT.strip()),
         md("""
 ## Save
 

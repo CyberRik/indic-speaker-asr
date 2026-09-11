@@ -1,0 +1,54 @@
+# Stage 4 -- ASR and attribution results
+
+Common subset: 74 of 99 clips scored by every condition.
+
+All rates are percentages, error-weighted (sum of errors / sum of reference words).
+
+`ref` is an ORACLE condition using the reference diarization. It is a diagnostic floor, never a system result.
+
+| asr                 | diar                   | subset   |   clips |   WER |   cpWER |   DI_cpWER |   attribution_cost |   WDER |   cpWER_unweighted_mean |   ref_words |
+|:--------------------|:-----------------------|:---------|--------:|------:|--------:|-----------:|-------------------:|-------:|------------------------:|------------:|
+| indicconformer      | pyannote31             | all      |      99 | 78.82 |   79.67 |      79.62 |               0.05 |  20.12 |                   76.94 |      125908 |
+| indicconformer      | pyannote31+llm         | all      |      99 | 78.82 |   80    |      79.95 |               0.05 |  20.96 |                   78.19 |      125908 |
+| indicconformer      | pyannote31+rule        | all      |      99 | 78.82 |   79.7  |      79.64 |               0.06 |  20.01 |                   76.97 |      125908 |
+| indicconformer      | ref (oracle)           | all      |      99 | 78.82 |   79.95 |      79.93 |               0.02 |  21.45 |                   77.6  |      125908 |
+| indicconformer      | sortformer             | all      |      74 | 75.41 |   81.65 |      81.62 |               0.03 |  24.12 |                   79.08 |       51018 |
+| indicconformer      | sortformer+rule        | all      |      74 | 75.41 |   81.63 |      81.58 |               0.05 |  23.68 |                   79.14 |       51018 |
+| indicconformer      | sortformer_stream      | all      |      99 | 78.82 |   86.96 |      86.91 |               0.05 |  39.58 |                   82.82 |      125908 |
+| indicconformer      | sortformer_stream+rule | all      |      99 | 78.82 |   87    |      86.88 |               0.12 |  39.41 |                   82.87 |      125908 |
+| indicconformer_free | pyannote31             | all      |      99 | 93.66 |   94.15 |      94.12 |               0.03 |  18.54 |                   94.12 |      125908 |
+| indicconformer_free | pyannote31+rule        | all      |      99 | 93.66 |   94.17 |      94.14 |               0.03 |  18.49 |                   94.12 |      125908 |
+| indicconformer_free | ref (oracle)           | all      |      99 | 93.66 |   94.23 |      94.22 |               0.01 |  19.35 |                   94.13 |      125908 |
+| indicconformer_free | sortformer             | all      |      74 | 92.95 |   97.52 |      97.72 |              -0.2  |  28.2  |                   96.53 |       51018 |
+| indicconformer_free | sortformer+rule        | all      |      74 | 92.95 |   97.51 |      97.71 |              -0.2  |  27.9  |                   96.53 |       51018 |
+| indicconformer_free | sortformer_stream      | all      |      99 | 93.66 |   98.21 |      98.38 |              -0.17 |  43.33 |                   97.42 |      125908 |
+| indicconformer_free | sortformer_stream+rule | all      |      99 | 93.66 |   98.26 |      98.44 |              -0.18 |  43.2  |                   97.51 |      125908 |
+| whisper             | pyannote31             | all      |      99 | 85.7  |   86.67 |      86.49 |               0.18 |  21.27 |                   89.36 |      125908 |
+| whisper             | pyannote31+rule        | all      |      99 | 85.7  |   86.71 |      86.53 |               0.18 |  21.35 |                   89.39 |      125908 |
+| whisper             | ref (oracle)           | all      |      99 | 85.7  |   88.14 |      88.13 |               0.01 |  24.01 |                   90.1  |      125908 |
+| whisper             | sortformer             | all      |      74 | 86.4  |   91.4  |      91.28 |               0.12 |  31.31 |                   92.52 |       51018 |
+| whisper             | sortformer+rule        | all      |      74 | 86.4  |   91.38 |      91.27 |               0.11 |  31.55 |                   92.53 |       51018 |
+| whisper             | sortformer_stream      | all      |      99 | 85.7  |   92.37 |      92.28 |               0.09 |  42.32 |                   93.21 |      125908 |
+| whisper             | sortformer_stream+rule | all      |      99 | 85.7  |   92.38 |      92.29 |               0.09 |  42.45 |                   93.24 |      125908 |
+| indicconformer      | pyannote31             | common   |      74 | 75.41 |   76.59 |      76.56 |               0.03 |  18.1  |                   75.65 |       51018 |
+| indicconformer      | pyannote31+llm         | common   |      74 | 75.41 |   77.14 |      77.1  |               0.04 |  19.32 |                   77.22 |       51018 |
+| indicconformer      | pyannote31+rule        | common   |      74 | 75.41 |   76.61 |      76.58 |               0.03 |  17.76 |                   75.69 |       51018 |
+| indicconformer      | ref (oracle)           | common   |      74 | 75.41 |   76.91 |      76.88 |               0.03 |  19.38 |                   76.47 |       51018 |
+| indicconformer      | sortformer             | common   |      74 | 75.41 |   81.65 |      81.62 |               0.03 |  24.12 |                   79.08 |       51018 |
+| indicconformer      | sortformer+rule        | common   |      74 | 75.41 |   81.63 |      81.58 |               0.05 |  23.68 |                   79.14 |       51018 |
+| indicconformer      | sortformer_stream      | common   |      74 | 75.41 |   85.32 |      85.16 |               0.16 |  35.57 |                   81.4  |       51018 |
+| indicconformer      | sortformer_stream+rule | common   |      74 | 75.41 |   85.35 |      85.05 |               0.3  |  35.25 |                   81.45 |       51018 |
+| indicconformer_free | pyannote31             | common   |      74 | 92.95 |   93.58 |      93.64 |              -0.06 |  17.51 |                   93.86 |       51018 |
+| indicconformer_free | pyannote31+rule        | common   |      74 | 92.95 |   93.61 |      93.67 |              -0.06 |  17.51 |                   93.84 |       51018 |
+| indicconformer_free | ref (oracle)           | common   |      74 | 92.95 |   93.55 |      93.53 |               0.02 |  16.61 |                   93.87 |       51018 |
+| indicconformer_free | sortformer             | common   |      74 | 92.95 |   97.52 |      97.72 |              -0.2  |  28.2  |                   96.53 |       51018 |
+| indicconformer_free | sortformer+rule        | common   |      74 | 92.95 |   97.51 |      97.71 |              -0.2  |  27.9  |                   96.53 |       51018 |
+| indicconformer_free | sortformer_stream      | common   |      74 | 92.95 |   98.94 |      99.01 |              -0.07 |  40.42 |                   97.2  |       51018 |
+| indicconformer_free | sortformer_stream+rule | common   |      74 | 92.95 |   98.97 |      99.07 |              -0.1  |  40.06 |                   97.3  |       51018 |
+| whisper             | pyannote31             | common   |      74 | 86.4  |   87.2  |      87.12 |               0.08 |  23.83 |                   90.01 |       51018 |
+| whisper             | pyannote31+rule        | common   |      74 | 86.4  |   87.24 |      87.16 |               0.08 |  23.86 |                   90.03 |       51018 |
+| whisper             | ref (oracle)           | common   |      74 | 86.4  |   87.93 |      87.9  |               0.03 |  24.84 |                   90.75 |       51018 |
+| whisper             | sortformer             | common   |      74 | 86.4  |   91.4  |      91.28 |               0.12 |  31.31 |                   92.52 |       51018 |
+| whisper             | sortformer+rule        | common   |      74 | 86.4  |   91.38 |      91.27 |               0.11 |  31.55 |                   92.53 |       51018 |
+| whisper             | sortformer_stream      | common   |      74 | 86.4  |   92.64 |      92.4  |               0.24 |  36.94 |                   93.12 |       51018 |
+| whisper             | sortformer_stream+rule | common   |      74 | 86.4  |   92.65 |      92.42 |               0.23 |  37.27 |                   93.15 |       51018 |

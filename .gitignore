@@ -1,4 +1,8 @@
-data/
+# data/ holds audio and ~150 MB of per-condition JSON. Only the scored results
+# are committed. `data/*` rather than `data/`: git cannot re-include a path
+# whose parent directory is itself ignored.
+data/*
+!data/results/
 raw/
 *.wav
 upload_code/
@@ -7,5 +11,7 @@ stage1.log
 # Raw Kaggle run scrollback -- transient, and the results live in
 # data/results/ and the saved Kaggle datasets.
 notebooks/download*.txt
+notebooks/dump.txt
+notebooks/tmp.ipynb
 __pycache__/
 *.pyc
