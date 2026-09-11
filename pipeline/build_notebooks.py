@@ -1477,8 +1477,393 @@ Stages 5 and 6 attach this by name). It carries both the attribution and
     print(f"wrote {out}  ({out.stat().st_size / 1024:.1f} KB, {len(cells)} cells)")
 
 
+S12_SETUP = r"""
+# Where the audio comes from. YouTube's treatment of cloud IPs is outside this
+# pipeline's control, so there are two supported sources:
+#
+#   "dataset"  attach sarvam-diar-audio -- the WAVs the reported results were
+#              computed from. Stage 1 is VERIFIED rather than re-run.
+#   "youtube"  download again. Works from a home connection (the reference run).
+#              On Kaggle it needs cookies and a JS runtime; see
+#              "Downloading on Kaggle" below.
+AUDIO_SOURCE = "dataset"
+
+import os, pathlib, shlex, shutil
+
+assert AUDIO_SOURCE in ("dataset", "youtube"), AUDIO_SOURCE
+ROOT = pathlib.Path("/kaggle/input")
+# A snapshot dataset can carry an older copy of the scripts, and the first rglob
+# hit is not necessarily the current one. Prefer the directory holding the most
+# pipeline scripts, tie-broken toward a path named like the code dataset.
+_cands = {p.parent for p in ROOT.rglob("stage1_extract.py")}
+assert _cands, "stage1_extract.py is in no attached dataset -- attach sarvam-diar-code"
+CODE = max(_cands, key=lambda d: (len(list(d.glob("stage*.py"))),
+                                  "code" in str(d).lower()))
+
+_x = sorted(ROOT.rglob("youtube_segments_final.xlsx"))
+assert _x, "youtube_segments_final.xlsx is in no attached dataset"
+XLSX = next((p for p in _x if p.parent == CODE), _x[0])
+
+for name in ("stage1_extract.py", "stage2_parse_refs.py"):
+    shutil.copy(CODE / name, "/kaggle/working/")
+
+WORK = pathlib.Path("/kaggle/working/data")
+WORK.mkdir(parents=True, exist_ok=True)
+
+# Cookies are copied to /tmp, not used in place and not copied into /kaggle/working:
+# yt-dlp writes the jar back on exit, which fails on the read-only /kaggle/input,
+# and anything under /kaggle/working ends up inside the saved output dataset.
+_cookies = sorted(ROOT.rglob("cookies*.txt"))
+if _cookies:
+    shutil.copy(_cookies[0], "/tmp/cookies.txt")
+    os.environ["YTDLP_COOKIES"] = "/tmp/cookies.txt"
+    # Logged in, yt-dlp switches to the tv_downgraded client, which YouTube
+    # currently answers with "The page needs to be reloaded" (yt-dlp #17389).
+    os.environ["YTDLP_PLAYER_CLIENTS"] = "web_embedded"
+
+# One worker when logged in: parallel downloads on one account get it flagged.
+# --retry-permanent because no_audio, which the script files as permanent, is on
+# Kaggle a missing JS runtime rather than a missing stream.
+WORKERS = 1 if _cookies else 3
+S1 = (f"python stage1_extract.py --input {shlex.quote(str(XLSX))} --out data "
+      f"--workers {WORKERS} --retry-permanent")
+
+print("AUDIO_SOURCE:", repr(AUDIO_SOURCE))
+print("CODE    :", CODE)
+print("XLSX    :", XLSX)
+print("scripts :", sorted(p.name for p in pathlib.Path("/kaggle/working").glob("stage*.py")))
+print("cookies :", _cookies[0] if _cookies else "none attached")
+print("clients :", os.environ.get("YTDLP_PLAYER_CLIENTS", "(script default)"))
+print("ffmpeg  :", shutil.which("ffmpeg"))
+"""
+
+
+S12_LINK = r"""
+if AUDIO_SOURCE == "dataset":
+    # Point data/wav at the attached audio and use the reference run's manifest,
+    # which is byte-identical to the local one. Nothing is downloaded, and the
+    # Stage 1 run cells below skip themselves.
+    _dirs = {p.parent for p in ROOT.rglob("*.wav")}
+    assert _dirs, "no WAVs attached -- attach sarvam-diar-audio, or set AUDIO_SOURCE = 'youtube'"
+    AUDIO = max(_dirs, key=lambda d: len(list(d.glob("*.wav"))))
+    wav = WORK / "wav"
+    if wav.is_symlink():
+        wav.unlink()
+    elif wav.exists():
+        assert not any(wav.glob("*.wav")), (
+            "data/wav holds downloaded audio -- move it aside before linking the dataset")
+        shutil.rmtree(wav)
+    wav.symlink_to(AUDIO, target_is_directory=True)
+    shutil.copy(CODE / "manifest.jsonl", WORK / "manifest.jsonl")
+    print("AUDIO   :", AUDIO, len(list(AUDIO.glob("*.wav"))), "wavs, linked read-only as data/wav")
+    print("manifest:", CODE / "manifest.jsonl")
+else:
+    # A link left behind by a "dataset" session makes every cut fail on the
+    # read-only input, with OSError(30) raised only AFTER each download finishes.
+    if (WORK / "wav").is_symlink():
+        (WORK / "wav").unlink()
+    print("downloading into", WORK / "wav")
+"""
+
+
+S12_JS = r"""
+# YouTube withholds formats until a JavaScript challenge is solved, and yt-dlp
+# solves it with an external runtime; without one, web_embedded returns
+# "Requested format is not available". Deno is the runtime yt-dlp enables by
+# default. If node is on PATH instead:
+#     os.environ["YTDLP_CMD"] = "yt-dlp --js-runtimes node"
+if AUDIO_SOURCE == "youtube":
+    get_ipython().system("curl -fsSL https://deno.land/install.sh | sh -s -- -y > /dev/null")
+    os.environ["PATH"] = os.path.expanduser("~/.deno/bin") + ":" + os.environ["PATH"]
+    get_ipython().system("deno --version | head -1")
+else:
+    print("skipped: AUDIO_SOURCE =", repr(AUDIO_SOURCE))
+"""
+
+
+S12_SMOKE = r"""
+if AUDIO_SOURCE == "youtube":
+    get_ipython().system(S1 + " --limit 3")
+else:
+    print("skipped: AUDIO_SOURCE = 'dataset' -- the attached audio is verified below")
+"""
+
+
+S12_FULL = r"""
+if AUDIO_SOURCE == "youtube":
+    get_ipython().system(S1)
+else:
+    print("skipped: AUDIO_SOURCE = 'dataset' -- the attached audio is verified below")
+"""
+
+
+S1_CHECK = r"""
+# Two different questions, kept apart on purpose.
+#
+#   1. Is every WAV correct?  Format, exact length, not silent. That is the
+#      pipeline's job and must hold on any machine, so it is asserted.
+#   2. Did this run get the same clips as the reference run?  That depends on
+#      YouTube as well as on the code -- a video can vanish between runs -- so
+#      it is reported, not asserted.
+#
+# There is no audio checksum. YouTube can serve a different encode to a
+# different IP or player client, so the samples need not match bit for bit even
+# when the trim is perfect. Length is what the trim controls, and length is exact.
+import json
+import wave
+
+import numpy as np
+
+recs = {}
+for line in (WORK / "manifest.jsonl").read_text(encoding="utf-8").splitlines():
+    if not line.strip():
+        continue
+    try:
+        r = json.loads(line)
+    except json.JSONDecodeError:        # truncated last line of a killed run
+        continue
+    recs[r["clip_id"]] = r              # append-only: the last record per clip wins
+
+ok = [r for r in recs.values() if r["status"] == "ok"]
+not_ok = [r for r in recs.values() if r["status"] != "ok"]
+
+broken, minutes = [], 0.0
+for r in ok:
+    with wave.open(str(WORK / "wav" / (r["clip_id"] + ".wav")), "rb") as w:
+        sr, ch, width, n = w.getframerate(), w.getnchannels(), w.getsampwidth(), w.getnframes()
+        x = np.frombuffer(w.readframes(n), dtype=np.int16).astype(np.float32) / 32768
+    # Whole-clip RMS: the corpus is ~94% speech, so a real clip sits far above
+    # -45 dBFS. Below it means an empty or wrong audio stream was cut.
+    rms_db = float(20 * np.log10(np.sqrt(np.mean(x ** 2)) + 1e-12)) if x.size else -240.0
+    minutes += n / sr / 60
+    if (sr, ch, width) != (16000, 1, 2) or n != r["expected_samples"] or rms_db < -45:
+        broken.append((r["clip_id"], sr, ch, width, n - r["expected_samples"], round(rms_db, 1)))
+
+stray = sorted(p.name for p in (WORK / "wav").glob("*.tmp.wav"))
+print(f"{len(ok)} ok / {len(recs)} clips in the manifest, {minutes:.1f} min of audio")
+for b in broken:
+    print("  BROKEN (clip, sr, ch, bytes/sample, sample delta, rms dBFS):", b)
+assert not broken, "a WAV has the wrong format or length, or is silent -- see above"
+assert not stray, f"half-written WAVs left behind: {stray}"
+print(f"all {len(ok)}: 16 kHz, mono, 16-bit, exact sample count, not silent")
+
+print()
+for r in not_ok:
+    print(f"  {r['status']:<12} {r['video_id']}  [{r.get('error_class')}] "
+          f"{(r.get('error_msg') or '').splitlines()[-1][:90] if r.get('error_msg') else ''}")
+got_failed = {r["video_id"]: r.get("error_class") for r in not_ok}
+same = (len(ok) == 99 and got_failed == {"GUVrL5ltiP4": "unavailable"}
+        and abs(minutes - 735.5) < 0.1)
+print("reference run: 99 ok, 735.5 min, GUVrL5ltiP4 unavailable")
+print(f"this run     : {len(ok)} ok, {minutes:.1f} min, {got_failed or 'no failures'}")
+print("MATCHES the reference run" if same else
+      "DIFFERS -- bot_gated / network failures are retryable: re-run the full-run cell")
+"""
+
+
+S2_CHECK = r"""
+# Stage 2 is a pure function of the xlsx, so unlike the audio it CAN be checked
+# byte for byte. The expected digest is from the local run that produced the
+# ref/ every later stage consumed, and it equals the digest of the ref/ inside
+# sarvam-diar-code.
+#
+# clip_meta.csv is left out of the digest deliberately: its has_audio column
+# reads the Stage 1 manifest, so it legitimately changes if YouTube does.
+import hashlib
+
+import pandas as pd
+
+EXPECTED_REF_SHA256 = "e505186dc1cd00ea79301effbc554dc01951d2aa2ec6d39dc4a739d2a4e36dc1"
+
+
+def ref_digest(root):
+    files = sorted(list((root / "rttm").glob("*.rttm")) + list((root / "segments").glob("*.json")),
+                   key=lambda p: (p.parent.name, p.name))
+    m = hashlib.sha256()
+    for p in files:
+        m.update(p.parent.name.encode() + b"/" + p.name.encode() + b"\0")
+        # CRLF -> LF: the expected digest was taken on Windows, where write_text
+        # translates newlines. Nothing else is normalised.
+        m.update(p.read_bytes().replace(b"\r\n", b"\n"))
+    return m.hexdigest(), len(files)
+
+
+digest, n_files = ref_digest(WORK / "ref")
+print(f"this run    : {digest}  ({n_files} files)")
+print(f"expected    : {EXPECTED_REF_SHA256}  (200 files)")
+if (CODE / "ref").is_dir():
+    print(f"code dataset: {ref_digest(CODE / 'ref')[0]}  <- the ref/ Stages 3-6 consumed")
+assert (digest, n_files) == (EXPECTED_REF_SHA256, 200), (
+    "ref/ differs from the reference run. Stage 2 reads nothing but the xlsx, so "
+    "either the xlsx or stage2_parse_refs.py is not the version that was used."
+)
+print("ref/rttm + ref/segments: IDENTICAL to the reference run")
+
+meta = pd.read_csv(WORK / "ref" / "clip_meta.csv")
+print()
+print(f"{len(meta)} clips, {meta.duration.sum() / 3600:.2f} h, "
+      f"{int(meta.has_audio.sum())} with audio; overlap "
+      f"{meta.overlap_sec.sum() / meta.speech_sec.sum() * 100:.2f}% of speech")
+print("reference but no audio:", meta.loc[~meta.has_audio.astype(bool), "clip_id"].tolist())
+"""
+
+
+S12_SAVE = r"""
+import pathlib, shutil
+
+W = pathlib.Path("/kaggle/working")
+# Scripts out, so a later session's rglob cannot pick this snapshot's copy over
+# sarvam-diar-code. raw/ holds only download leftovers; nothing downstream reads it.
+for p in W.glob("*.py"):
+    p.unlink()
+shutil.rmtree(W / "data" / "raw", ignore_errors=True)
+# A link into /kaggle/input is not audio; keep it out of the saved output.
+if (W / "data" / "wav").is_symlink():
+    (W / "data" / "wav").unlink()
+print("kept:", sorted(str(p.relative_to(W)) for p in (W / "data").iterdir()))
+"""
+
+
+def build_stage12() -> None:
+    cells = [
+        md("""
+# Stages 1–2 — Audio extraction and reference parsing
+
+**Attach:** `sarvam-diar-code` (both scripts, `youtube_segments_final.xlsx`, and the
+reference run's Stage 1 manifest), plus **one** audio source, chosen in the setup cell:
+
+- `AUDIO_SOURCE = "dataset"` (default): attach `sarvam-diar-audio`. Stage 1 is
+  *verified* against the WAVs the reported results were computed from.
+- `AUDIO_SOURCE = "youtube"`: download again. Attach a private dataset holding a
+  `cookies.txt`, and read "Downloading on Kaggle" first.
+
+**Settings:** accelerator **None**, Internet **on**. No `HF_TOKEN`.
+
+| stage | produces | runtime |
+|---|---|---|
+| 1 | `data/wav/<clip_id>.wav` (16 kHz mono PCM, 1.41 GB), `data/manifest.jsonl` | verify: ~1 min; download: ~20 min at home, slower on Kaggle with one worker |
+| 2 | `data/ref/` — RTTM, speaker↔text segments, `clip_meta.csv`, anomaly report | seconds |
+
+No GPU. Downloading and cutting audio is network and ffmpeg work, and keeping it
+out of the GPU notebooks means a YouTube hiccup never costs GPU quota.
+
+The reference run (local, 2026-09-06) got **99 of 100 clips**: `GUVrL5ltiP4` is
+unavailable on YouTube. That is a permanent failure and is expected here too.
+"""),
+        md("""
+## Install
+
+`yt-dlp` is upgraded to the latest release rather than pinned. It is the one
+dependency where an old version is *wrong* rather than merely old: YouTube changes
+what it serves every few weeks, and yt-dlp releases track that. `[default]` brings
+`yt-dlp-ejs`, the scripts it needs if YouTube demands a JavaScript challenge.
+ffmpeg is preinstalled on Kaggle.
+"""),
+        code('!pip install -qU "yt-dlp[default]" openpyxl\n'
+             '!yt-dlp --version\n'
+             '!ffmpeg -version | head -1'),
+        code(S12_SETUP),
+        code(S12_LINK),
+        md("""
+## Downloading on Kaggle
+
+Only for `AUDIO_SOURCE = "youtube"`. The reference run, from a home connection,
+needed none of this. From Kaggle on 2026-09-11, each fix exposed the next failure:
+
+1. **No cookies → `bot_gated`** ("Sign in to confirm you're not a bot"). YouTube
+   gates datacenter IPs. In a **private/incognito** window, log in to YouTube
+   (ideally a throwaway account: yt-dlp's wiki warns that accounts can be banned),
+   open `youtube.com/robots.txt` in the same tab, export the cookies in Netscape
+   format, and close the window at once so YouTube does not rotate them. Upload
+   `cookies.txt` as a **private** dataset and attach it.
+2. **Cookies → "The page needs to be reloaded"** (filed as `unknown`). Logged in,
+   yt-dlp uses the `tv_downgraded` client, which YouTube currently rejects
+   ([yt-dlp #17389](https://github.com/yt-dlp/yt-dlp/issues/17389)). The setup
+   cell switches to `web_embedded` whenever cookies are attached.
+3. **`web_embedded` without a JS runtime → `no_audio`** ("Requested format is not
+   available"). YouTube withholds formats until a JavaScript challenge is solved.
+   The next cell installs Deno.
+4. **With all three, downloads appear to work — unconfirmed.** A run that
+   accidentally cut into the read-only linked `data/wav` crashed with `OSError(30)`,
+   and the cut only starts after a download finishes. No full run was completed.
+
+`network` failures are retryable: re-run, and finished clips are skipped.
+`unavailable` / `private` / `removed` are permanent; `GUVrL5ltiP4` lands there.
+"""),
+        code(S12_JS),
+        md("""
+## Stage 1 — smoke test (3 clips)
+
+What correct output looks like:
+
+- `[csv ] 100 rows in -> 3 clips` (the limit applies after loading)
+- `[env ]` lines naming a yt-dlp and an ffmpeg version, and `cookies: ... (found)`
+  if you attached one
+- `[ ok ] <clip_id>  <seconds>s  (+0 samp)`. **`+0` is the point**: the cut uses
+  ffmpeg output seeking (`-ss` after `-i`), which decodes and discards up to the
+  mark and is sample-exact. Input seeking snaps to a keyframe and drifts by up to
+  a second, which would shift every reference timestamp against the audio.
+- summary: `trim accuracy : 3/3 clips sample-exact`
+"""),
+        code(S12_SMOKE),
+        md("""
+## Stage 1 — full run
+
+Resumable: the manifest is append-only, and a clip is skipped only if its WAV still
+exists with the recorded sample count. So re-running this cell after an error
+redoes exactly what is missing. Each video is downloaded once and its raw audio
+deleted as soon as its windows are cut, so disk use stays near the final 1.41 GB.
+
+Expect `ok : 99`, `failed : 1` (`unavailable`, permanent), `99/99 clips
+sample-exact`, `worst |delta| : 0 samples`, `735.5 min across 99 clips`.
+"""),
+        code(S12_FULL),
+        code(S1_CHECK),
+        md("""
+## Stage 2 — reference parsing
+
+Turns the two label columns into what the scorers read. Three things it does that
+are choices, not formatting:
+
+- **The two columns are joined by index, and that is asserted.**
+  `diarization_segments` and `asr_segments` are supposed to share boundaries in
+  the same order. The script stops if a turn count or a timestamp disagrees,
+  rather than silently giving one speaker's words to another.
+- **Turns are clipped to `[0, end_sec − start_sec]`.** Labels running past the
+  window are truncated (88 turns, 137.9 s), and 38 lying wholly outside it are
+  dropped. Reference and hypothesis see the same window, so this biases no system.
+- **Overlap is speaker-aware.** Only time with ≥2 *distinct* speakers counts, so
+  adjacent same-speaker turns do not inflate it.
+
+All 100 rows are parsed, including the one with no audio: `has_audio` marks it,
+and every scorer skips it.
+
+Expect `reference turns kept : 9902`, `OVERLAP ... 7.60% of speech`,
+`clips containing overlap: 91/100`, `clips with audio ready : 99/100`.
+"""),
+        code("!python stage2_parse_refs.py --input {XLSX} --out data "
+             "--manifest data/manifest.jsonl"),
+        code(S2_CHECK),
+        md("""
+## Save
+
+Strip the scripts first (the stale-copy lesson from Stage 4), then **Save Version →
+Quick Save**, then Output tab → **New dataset**. Name it something other than
+`sarvam-diar-audio`, e.g. `sarvam-diar-audio-repro`, so the dataset the reported
+results were computed from stays exactly as it was.
+"""),
+        code(S12_SAVE),
+        code('!du -sh /kaggle/working/data/* 2>/dev/null'),
+    ]
+    out = NOTEBOOKS / "stage12_extract_refs.ipynb"
+    out.write_text(json.dumps(notebook(cells, accelerator="None"), indent=1,
+                              ensure_ascii=False), encoding="utf-8")
+    print(f"wrote {out}  ({out.stat().st_size / 1024:.1f} KB, {len(cells)} cells)")
+
+
 def main() -> None:
     NOTEBOOKS.mkdir(exist_ok=True)
+    build_stage12()
     build_stage3()
     build_stage4_indic()
     build_stage4_whisper()

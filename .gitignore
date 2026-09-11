@@ -8,6 +8,14 @@ raw/
 upload_code/
 stage1.log
 
+# The Drive folder the end-to-end notebook reads (pipeline/pack_drive.py), and
+# the working directory of a local run of that notebook.
+drive_upload/
+asr_run/
+
+# Downloaded Kaggle dataset archives (the inputs and outputs of the Kaggle runs).
+datasets/
+
 # Raw Kaggle run scrollback -- transient, and the results live in
 # data/results/ and the saved Kaggle datasets.
 notebooks/download*.txt
@@ -15,3 +23,17 @@ notebooks/dump.txt
 notebooks/tmp.ipynb
 __pycache__/
 *.pyc
+
+# LaTeX build products; the compiled writeup.pdf itself is kept.
+writeup/*.aux
+writeup/*.bbl
+writeup/*.blg
+writeup/*.log
+writeup/*.out
+writeup/*.fls
+writeup/*.fdb_latexmk
+writeup/*.synctex.gz
+
+# Third-party papers go in the Drive folder, not the repository: their
+# licences vary. writeup/papers/README.md lists what they are and why.
+writeup/papers/*.pdf
