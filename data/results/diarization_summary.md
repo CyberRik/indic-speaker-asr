@@ -4,6 +4,12 @@
 
 | System | DER | Miss | FA | Conf | JER | Spk acc | Spk MAE |
 |---|---|---|---|---|---|---|---|
+| ic_lid_fallback__pyannote31 | 29.17% | 11.59% | 5.89% | 11.69% | 39.50% | 72.7% | 0.33 |
+| ic_lid_fallback__pyannote31+rule | 30.29% | 11.59% | 5.89% | 12.81% | 40.77% | 73.7% | 0.32 |
+| ic_lid_fallback__sortformer | 75.25% | 65.14% | 2.19% | 7.92% | 65.89% | 43.4% | 1.55 |
+| ic_lid_fallback__sortformer_stream | 48.65% | 9.82% | 6.28% | 32.54% | 58.98% | 51.5% | 0.68 |
+| ic_lid_fallback__sortformer_stream+rule | 49.45% | 9.82% | 6.28% | 33.34% | 59.85% | 52.5% | 0.67 |
+| ic_lid_fallback__sortformer+rule | 75.46% | 65.14% | 2.19% | 8.13% | 66.55% | 43.4% | 1.55 |
 | indicconformer__pyannote31 | 29.03% | 11.59% | 5.89% | 11.56% | 39.47% | 72.7% | 0.33 |
 | indicconformer__pyannote31+llm | 29.90% | 11.59% | 5.89% | 12.43% | 42.07% | 71.7% | 0.34 |
 | indicconformer__pyannote31+rule | 30.55% | 11.59% | 5.89% | 13.08% | 41.07% | 73.7% | 0.32 |

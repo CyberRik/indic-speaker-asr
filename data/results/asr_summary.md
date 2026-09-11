@@ -8,6 +8,13 @@ All rates are percentages, error-weighted (sum of errors / sum of reference word
 
 | asr                 | diar                   | subset   |   clips |   WER |   cpWER |   DI_cpWER |   attribution_cost |   WDER |   cpWER_unweighted_mean |   ref_words |
 |:--------------------|:-----------------------|:---------|--------:|------:|--------:|-----------:|-------------------:|-------:|------------------------:|------------:|
+| ic_lid_fallback     | pyannote31             | all      |      99 | 71.71 |   72.96 |      72.87 |               0.09 |   9.32 |                   72.56 |      125908 |
+| ic_lid_fallback     | pyannote31+rule        | all      |      99 | 71.71 |   72.99 |      72.9  |               0.09 |   9.39 |                   72.6  |      125908 |
+| ic_lid_fallback     | ref (oracle)           | all      |      99 | 71.71 |   74.69 |      74.67 |               0.02 |  13.09 |                   73.73 |      125908 |
+| ic_lid_fallback     | sortformer             | all      |      74 | 67.69 |   76.89 |      76.78 |               0.11 |  19.46 |                   75.97 |       51018 |
+| ic_lid_fallback     | sortformer+rule        | all      |      74 | 67.69 |   76.87 |      76.75 |               0.12 |  19.45 |                   76.02 |       51018 |
+| ic_lid_fallback     | sortformer_stream      | all      |      99 | 71.71 |   82.99 |      82.93 |               0.06 |  34.62 |                   80.13 |      125908 |
+| ic_lid_fallback     | sortformer_stream+rule | all      |      99 | 71.71 |   82.98 |      82.85 |               0.13 |  34.69 |                   80.14 |      125908 |
 | indicconformer      | pyannote31             | all      |      99 | 78.82 |   79.67 |      79.62 |               0.05 |  20.12 |                   76.94 |      125908 |
 | indicconformer      | pyannote31+llm         | all      |      99 | 78.82 |   80    |      79.95 |               0.05 |  20.96 |                   78.19 |      125908 |
 | indicconformer      | pyannote31+rule        | all      |      99 | 78.82 |   79.7  |      79.64 |               0.06 |  20.01 |                   76.97 |      125908 |
@@ -30,6 +37,13 @@ All rates are percentages, error-weighted (sum of errors / sum of reference word
 | whisper             | sortformer+rule        | all      |      74 | 86.4  |   91.38 |      91.27 |               0.11 |  31.55 |                   92.53 |       51018 |
 | whisper             | sortformer_stream      | all      |      99 | 85.7  |   92.37 |      92.28 |               0.09 |  42.32 |                   93.21 |      125908 |
 | whisper             | sortformer_stream+rule | all      |      99 | 85.7  |   92.38 |      92.29 |               0.09 |  42.45 |                   93.24 |      125908 |
+| ic_lid_fallback     | pyannote31             | common   |      74 | 67.69 |   69.09 |      69.05 |               0.04 |   8.9  |                   71.22 |       51018 |
+| ic_lid_fallback     | pyannote31+rule        | common   |      74 | 67.69 |   69.12 |      69.09 |               0.03 |   8.97 |                   71.25 |       51018 |
+| ic_lid_fallback     | ref (oracle)           | common   |      74 | 67.69 |   69.91 |      69.88 |               0.03 |  11.17 |                   72.43 |       51018 |
+| ic_lid_fallback     | sortformer             | common   |      74 | 67.69 |   76.89 |      76.78 |               0.11 |  19.46 |                   75.97 |       51018 |
+| ic_lid_fallback     | sortformer+rule        | common   |      74 | 67.69 |   76.87 |      76.75 |               0.12 |  19.45 |                   76.02 |       51018 |
+| ic_lid_fallback     | sortformer_stream      | common   |      74 | 67.69 |   81.51 |      81.32 |               0.19 |  31.83 |                   78.71 |       51018 |
+| ic_lid_fallback     | sortformer_stream+rule | common   |      74 | 67.69 |   81.46 |      81.14 |               0.32 |  31.96 |                   78.7  |       51018 |
 | indicconformer      | pyannote31             | common   |      74 | 75.41 |   76.59 |      76.56 |               0.03 |  18.1  |                   75.65 |       51018 |
 | indicconformer      | pyannote31+llm         | common   |      74 | 75.41 |   77.14 |      77.1  |               0.04 |  19.32 |                   77.22 |       51018 |
 | indicconformer      | pyannote31+rule        | common   |      74 | 75.41 |   76.61 |      76.58 |               0.03 |  17.76 |                   75.69 |       51018 |

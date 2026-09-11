@@ -397,6 +397,17 @@ ASR_ARG, DIAR_ARG = " ".join(ASR), " ".join(DIAR)
 """
 
 
+S4B_FALLBACK = """
+!python stage4_fallback.py --data data
+
+# Re-listed, not reused from the setup cell: ic_lid_fallback did not exist when
+# that cell ran, and attribution only crosses the systems named in ASR_ARG.
+ASR = sorted(p.name for p in (WORK / "asr").glob("*") if p.is_dir())
+ASR_ARG = " ".join(ASR)
+print("ASR :", ASR)
+"""
+
+
 S4B_RUN = """
 !python stage4_attribute.py --asr {ASR_ARG} --diar {DIAR_ARG} ref --data data
 """
@@ -1356,6 +1367,21 @@ why the script's exit code is non-zero on that condition. That is the correct
 outcome, not a bug to work around: a clip with no hypothesis is not a clip where
 nobody spoke.
 """),
+        md("""
+### Language-ID fallback: one more ASR system, built from the two above
+
+IndicConformer picks one language per clip from its own frame votes. On 13 clips
+that vote lands outside the languages this task serves (11 Urdu, 2 Nepali), and
+the whole clip is spelled in the wrong script: 100% WER regardless of what was
+heard. `ic_lid_fallback` keeps IndicConformer's words everywhere else and takes
+Whisper's on those clips.
+
+No reference is read. The input is the model's own language decision and a fixed
+list of served languages -- task configuration, not a per-clip label. CPU,
+seconds, and written in Stage 4a's format so everything downstream treats it as
+one more ASR system.
+"""),
+        code(S4B_FALLBACK),
         code(S4B_RUN),
         md("""
 ### Read the orphan rate before believing any cpWER
