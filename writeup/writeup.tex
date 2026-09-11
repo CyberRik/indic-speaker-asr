@@ -1,0 +1,235 @@
+\documentclass[10pt]{article}
+
+\usepackage[a4paper,margin=0.53in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{multicol}
+\usepackage{titlesec}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue!45!black,citecolor=blue!45!black,urlcolor=blue!45!black]{hyperref}
+
+\setlist{nosep,leftmargin=1.2em}
+\titlespacing*{\section}{0pt}{5pt}{2pt}
+\titlespacing*{\subsection}{0pt}{4pt}{1pt}
+\titleformat*{\section}{\large\bfseries}
+\titleformat*{\subsection}{\normalsize\bfseries}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{1.3pt}
+\setlength{\bibsep}{1pt}
+\renewcommand{\arraystretch}{1.0}
+
+\newcommand{\sys}[1]{\texttt{#1}}
+\newcommand{\ra}{$\rightarrow$}
+\newcommand{\x}{$\times$}
+
+\begin{document}
+
+\begin{center}
+  {\Large\bfseries Indic Diarization and ASR: Benchmark and Improvement}\\[3pt]
+  Ritankar Mondal \quad$\cdot$\quad September 2026
+\end{center}
+
+\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{%
+\textbf{Summary.} The best benchmarked combination is \textbf{IndicConformer-600M \x{} pyannote~3.1}
+(DER 27.34, JER 38.14, cpWER 79.67, WDER 20.12). The adopted improvement, a \textbf{language-ID fallback} to
+Whisper, lowers cpWER to \textbf{72.96} ($-6.71$) and WER to \textbf{71.71} ($-7.11$): 12 clips better, 87
+unchanged, \textbf{0 worse}, and it holds on all three diarizers. DER/JER are unchanged by construction, since
+the diarizer never sees words. \textbf{LLM speaker relabelling} was built and measured, and rejected: it
+worsens cpWER and WDER (\S\ref{sec:relabel}).}}
+
+\section{Data and metrics}
+
+\begin{itemize}
+  \item \textbf{Audio.} 99 of 100 segments extracted (one video is no longer available): 12.26\,h, 16\,kHz mono,
+        trims verified sample-exact. 9 scripts, 2--8 speakers, 7.61\% of speech overlapped.
+  \item \textbf{References.} 38 turns outside the window dropped, 88 clipped, 1 inverted and 3 empty turns
+        removed; 666 bracket tags (\texttt{<noise>}, \texttt{<laughter>}, \dots) stripped before scoring.
+  \item \textbf{Metrics.} DER/JER with pyannote.metrics at \textbf{collar 0, overlap scored}, UEM = full clip;
+        cpWER with MeetEval~\citep{vonneumann2023meeteval,watanabe2020chime6}; JER as in DIHARD~II~\citep{ryant2019dihard};
+        WDER hand-rolled after El Shafey et al.~\citep{shafey2019joint}. Rates are error-weighted; a 0.25\,s collar
+        with overlap excluded would report pyannote at 20.58, not 27.34.
+  \item \textbf{Ground truth never enters the pipeline;} the one reference-diarization condition is a labelled diagnostic.
+\end{itemize}
+
+\section{Baselines}
+
+\begin{center}\footnotesize
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Diarizer & DER & JER & Miss & FA & Conf. & Spk-count acc.\\
+\midrule
+\textbf{pyannote 3.1}~\citep{bredin2023pyannote,plaquet2023powerset} & \textbf{27.34} & \textbf{38.14} & 11.59 & 5.89 & 9.86 & \textbf{72.7\%}\\
+Sortformer 4spk-v1, streaming~\citep{park2024sortformer} & 47.23 & 57.82 & 9.82 & 6.28 & 31.13 & 51.5\%\\
+Sortformer 4spk-v1, offline$^{*}$ & 74.85 & 65.29 & 65.14 & 2.19 & 7.52 & 43.4\%\\
+\bottomrule
+\end{tabular}\\[2pt]
+{\footnotesize $^{*}$Its $O(T^2)$ attention ran out of memory on the 25 longest clips on a T4; those score as total miss,
+so this row measures memory, not the model.}
+\end{center}
+
+\begin{itemize}
+  \item \textbf{Speaker count.} pyannote is flat from 2 to 5+ speakers (DER 25.9--29.7); streaming Sortformer rises from
+        34.4 to 57.4 under its hard 4-speaker cap, and detects speech better (miss 9.82) but assigns it 3\x{} worse (confusion 31.13).
+  \item \textbf{Overlap is not where most error lies.} pyannote's DER is 46.47 inside overlapped speech and 20.41
+        elsewhere, but only \textbf{24\%} of its error seconds fall in overlap.
+\end{itemize}
+
+\textbf{ASR design: transcribe the whole clip, then assign words.} Each clip is transcribed once; every word goes to
+the diarizer turn it overlaps most, and words with no turn are kept (dropping them would reward a diarizer for missing
+speech). Against ASR on each diarized segment, this makes every cpWER difference purely a labelling difference, avoids
+Whisper's weakness on sub-second fragments, and needs 99 ASR calls, not 12{,}809. A word inside overlap goes to the
+speaker covering more of it and is counted separately; given the 24\% error share, source separation was not built first.
+
+\begin{center}\footnotesize
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+ASR (\x{} pyannote 3.1) & WER & cpWER & WDER\\
+\midrule
+\textbf{IndicConformer-600M multilingual} (AI4Bharat~\citep{javed2024indicvoices}; Conformer~\citep{gulati2020conformer}, CTC, ONNX) & \textbf{78.82} & \textbf{79.67} & \textbf{20.12}\\
+Whisper large-v3~\citep{radford2023whisper} (faster-whisper, greedy) & 85.70 & 86.67 & 21.27\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Two decoding defects were fixed before benchmarking.}
+\begin{enumerate}
+  \item \textbf{IndicConformer's CTC head is multi-softmax:} one softmax per language block, so scores across blocks are
+        not comparable. A global argmax spelled words across several scripts. Choosing the clip's language by
+        frame vote and decoding within that block takes \textbf{WER from 93.66 to 78.82}; the naive decode is kept as
+        a scored ablation.
+  \item \textbf{faster-whisper's temperature fallback samples without a seed:} one clip returned 87, 84 and 100
+        words on three runs, and 211 every time at temperature~0. Corpus WER improved 86.62\ra85.70 and runtime fell
+        from 396 to 153\,min.
+\end{enumerate}
+cpWER sits less than one point above WER: \textbf{recognition, not attribution, is the bottleneck.}
+
+\section{Improving the output}
+
+\subsection{Language-ID fallback (adopted)}
+
+\textbf{Diagnosis.} IndicConformer decodes each clip in one language. On 13 clips its own vote chose
+\textbf{Urdu (11) or Nepali (2)}, so every word came out in the wrong script and the clip scored 100\% WER regardless
+of what was heard. Hindi and Urdu speech is highly similar and conventionally written in different scripts, so this
+is acoustic ambiguity rather than a decoder bug.
+\textbf{Rule.} If IndicConformer's detected language is outside the served set
+\{hi, mr, bn, gu, kn, ml, or, pa, ta, te\}, use Whisper's words for that clip. No reference is read.
+
+\begin{center}\footnotesize
+\begin{tabular}{@{}lccc@{}}
+\toprule
+IndicConformer \x{} \dots & pyannote 3.1 & Sortformer streaming & Sortformer (74 clips)\\
+\midrule
+WER   & 78.82 \ra{} \textbf{71.71} & 78.82 \ra{} \textbf{71.71} & 75.41 \ra{} \textbf{67.69}\\
+cpWER & 79.67 \ra{} \textbf{72.96} & 86.96 \ra{} \textbf{82.99} & 81.65 \ra{} \textbf{76.89}\\
+WDER  & 20.12 \ra{} \textbf{9.32}  & 39.58 \ra{} \textbf{34.62} & 24.12 \ra{} \textbf{19.46}\\
+cpWER per clip: better / same / worse & 12 / 87 / 0 & 12 / 86 / 1 & 8 / 66 / 0\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{itemize}
+  \item \textbf{Devanagari WER falls from 79.2 to 57.2}, better than either system alone (Whisper: 69.4). Every fallback
+        row reproduces exactly the per-clip scores of the system it took its words from.
+  \item \textbf{Not fitted to scores:} routing Hindi- or Marathi-detected clips to Whisper instead makes corpus WER
+        \emph{worse} (82.56); the gain is the out-of-set rule, not a language preference.
+  \item \textbf{Caveats:} the served-language list is task knowledge; part of the WDER drop reflects WDER being
+        ill-conditioned near 100\% WER.
+\end{itemize}
+
+\subsection{Speaker relabelling from the transcript (not adopted)}\label{sec:relabel}
+
+\textbf{Design}, after DiarizationLM~\citep{wang2024diarizationlm} and lexical speaker error correction~\citep{paturi2023lexical}.
+Transcripts are cut into units (same-speaker runs split at pauses $>0.5$\,s); a unit may only move to an existing
+speaker, so \textbf{text cannot change and WER must not move} (asserted per clip). The LLM,
+Qwen2.5-7B-Instruct~\citep{qwen2024qwen25} in 4-bit on a T4, sees windows of 25 units and returns JSON edits with a
+confidence; edits below 0.7 are dropped and a clip where it edits over 30\% of units is discarded. A \textbf{rule
+baseline} moves any unit under 1\,s to its nearer neighbour.
+
+\begin{center}\footnotesize
+\begin{tabular}{@{}lccc@{}}
+\toprule
+IndicConformer \x{} pyannote 3.1 & cpWER & WDER & WDER per clip: better / same / worse\\
+\midrule
+baseline & 79.67 & 20.12 & --\\
++ rule   & 79.70 & 20.01 & 30 / 31 / 38\\
++ LLM    & 80.00 & 20.96 & \phantom{0}6 / 74 / 19\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Why it failed.}
+\begin{enumerate}
+  \item \textbf{Ceiling:} even after pause splitting, \textbf{37.87\% of words} sit in units spanning two true speakers,
+        out of reach of any relabel.
+  \item \textbf{Weak evidence:} at $\sim$79\% WER the text says little about who is speaking. The LLM's confidences were
+        always 0.8 or 0.9, and it did most damage on 2-speaker clips (WDER 7.54\ra12.16).
+  \item \textbf{ASR-dependent effect:} the rule helps all 6 IndicConformer conditions and hurts all 3 Whisper ones. CTC
+        output fragments into more, shorter units (4{,}468 vs.\ 3{,}132 on the same turns), where a sub-second unit is
+        usually diarizer jitter.
+\end{enumerate}
+\textbf{DER for a word-level fix.} Mapping word labels back onto the diarizer's turns with \emph{zero} edits already
+raises DER from 27.34 to 29.03, so that projection is the fair control. Against it the rule adds $+1.52$ DER and the
+LLM $+0.87$; the results table reports the control beside every DER.
+
+\section{Indic-specific observations}
+
+\begin{itemize}
+  \item \textbf{Script, not sound, decides the score:} Hindi/Urdu and Gujarati/Nepali language-ID confusions turn a
+        plausible transcript into 100\% WER.
+  \item \textbf{The two systems fail in opposite places.} IndicConformer: Kannada 64.9, Odia 68.5, Malayalam 71.4 WER,
+        where Whisper is at 96--101 (over 100 through insertions); Whisper wins on Devanagari (69.4 vs.\ 79.2) and Tamil
+        (78.1 vs.\ 92.1). IndicConformer mostly deletes: 0.42 output words per reference word, often dropping characters
+        inside otherwise correct words.
+  \item \textbf{Reference-turn attribution scores worse WDER than pyannote} (21.45 vs.\ 20.12): word timings drift past
+        the tight reference turns, suggesting timing mismatch in the labels.
+\end{itemize}
+
+\section{Limitations and next steps}
+
+\begin{itemize}
+  \item \textbf{Limitations.} Reference labels were not hand-audited (the timing result above is the strongest hint they
+        need it); the served-language list is a deployment assumption; video was unused, though active-speaker detection
+        targets exactly the dominant single-speaker confusion.
+  \item \textbf{Next.} Restrict IndicConformer's language vote to the served set; combine both ASR systems at word level
+        (ROVER~\citep{fiscus1997rover}); separate speakers in overlap; rerun relabelling on the improved ASR.
+\end{itemize}
+
+\textbf{Reproducibility.} \sys{notebooks/end\_to\_end.ipynb} runs every stage in order on Colab: it rebuilds the
+references from the spreadsheet byte-for-byte (SHA-256), re-runs each model live on a 3-clip subset, and recomputes
+attribution, scoring and the results table over all 99 clips, asserting they equal the committed tables. The subset
+reproduces the reference run exactly on other hardware: \textbf{0.00\% DER for all three diarizers, identical words for
+all three ASR systems}. Full 99-clip GPU runs are one switch away but need $>5$\,T4\,h, so they ran on Kaggle
+(notebooks with outputs in \sys{notebooks/}); extraction ran from a home connection, as YouTube bot-gates cloud IPs.
+Per-video tables: \sys{data/results/results\_table.md}, \sys{results\_per\_video.xlsx}.
+
+% Compact hand-set bibliography: the same 14 works as references.bib (kept in the
+% repository with full entries), shortened to fit the 2-page limit.
+{\scriptsize
+\setlength{\columnsep}{14pt}
+\begin{multicols}{2}
+\begin{thebibliography}{14}\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}
+\bibitem{bredin2023pyannote} H. Bredin. pyannote.audio 2.1 speaker diarization pipeline. \emph{Interspeech}, 2023.
+\bibitem{shafey2019joint} L. El Shafey, H. Soltau, I. Shafran. Joint speech recognition and speaker diarization via sequence transduction. \emph{Interspeech}, 2019. arXiv:1907.05337.
+\bibitem{fiscus1997rover} J. G. Fiscus. ROVER: recognizer output voting error reduction. \emph{ASRU}, 1997.
+\bibitem{gulati2020conformer} A. Gulati et al. Conformer: convolution-augmented transformer for ASR. \emph{Interspeech}, 2020. arXiv:2005.08100.
+\bibitem{javed2024indicvoices} T. Javed et al. IndicVoices: an inclusive multilingual speech dataset for Indian languages. \emph{Findings of ACL}, 2024. arXiv:2403.01926.
+\bibitem{park2024sortformer} T. Park et al. Sortformer: permutation-resolved speaker supervision. \emph{ICML}, 2025. arXiv:2409.06656.
+\bibitem{paturi2023lexical} R. Paturi, S. Srinivasan, X. Li. Lexical speaker error correction. \emph{Interspeech}, 2023. arXiv:2306.09313.
+\bibitem{plaquet2023powerset} A. Plaquet, H. Bredin. Powerset multi-class cross entropy loss for neural speaker diarization. \emph{Interspeech}, 2023. arXiv:2310.13025.
+\bibitem{qwen2024qwen25} Qwen Team. Qwen2.5 technical report, 2024. arXiv:2412.15115.
+\bibitem{radford2023whisper} A. Radford et al. Robust speech recognition via large-scale weak supervision. \emph{ICML}, 2023. arXiv:2212.04356.
+\bibitem{ryant2019dihard} N. Ryant et al. The second DIHARD diarization challenge. \emph{Interspeech}, 2019. arXiv:1906.07839.
+\bibitem{vonneumann2023meeteval} T. von Neumann et al. MeetEval: a toolkit for word error rates of meeting transcription. \emph{CHiME}, 2023. arXiv:2307.11394.
+\bibitem{wang2024diarizationlm} Q. Wang et al. DiarizationLM: speaker diarization post-processing with LLMs. \emph{Interspeech}, 2024. arXiv:2401.03506.
+\bibitem{watanabe2020chime6} S. Watanabe et al. CHiME-6 challenge: multispeaker ASR for unsegmented recordings. \emph{CHiME}, 2020. arXiv:2004.09249.
+\end{thebibliography}
+\end{multicols}
+}
+
+\end{document}
