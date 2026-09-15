@@ -37,3 +37,5 @@ writeup/*.synctex.gz
 # Third-party papers go in the Drive folder, not the repository: their
 # licences vary. writeup/papers/README.md lists what they are and why.
 writeup/papers/*.pdf
+writeup/papers/READING.md
+
